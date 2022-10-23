@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # TODO REMOVE
+export ASSISTED_SERVICE_URL='http://rdu-infra-edge-03.infra-edge.lab.eng.rdu2.redhat.com:6008'
 export PULL_SECRET=''
 export CLUSTER_ID='fffea722-a425-490e-a9ca-ba920bc2e6c0'
 export INFRA_ENV_ID='7c477a6e-7586-48e5-ae70-b2d67a17a114'
@@ -67,17 +68,22 @@ function collect_and_upload_logs() {
   func_name=${FUNCNAME[0]}
 
   log_info "${func_name}" "Collecting logs."
-  # WIP - collect logs here.
+  logs_dir_name=$(hostname)_boot_logs_$(date '+%F_%H-%M-%S')
+  logs_path=/tmp/$logs_dir_name
+  mkdir $logs_path
+
+  journalctl > $logs_path/journalctl.log
+  ip a > $logs_path/ip_a.log
+
+  tar -czvf $logs_dir_name.tar.gz $logs_path
+
   log_info "${func_name}" "Uploading logs."
 
   curl -s \
+    -H "X-Secret-Key: ${PULL_SECRET_TOKEN}" \
     -X POST \
-    -F upload=@tmp.log \
-     "$ASSISTED_SERVICE_URL/$ASSISTED_API_BASE_PATH/clusters/$CLUSTER_ID/logs?logs_type=host&infra_env_id=$INFRA_ENV_ID&host_id=$HOST_ID"
-  echo
-
-
-
+    -F upfile=@$logs_dir_name.tar.gz \
+     "$ASSISTED_SERVICE_URL/$ASSISTED_API_BASE_PATH/clusters/$CLUSTER_ID/logs?logs_type=host-boot&infra_env_id=$INFRA_ENV_ID&host_id=$HOST_ID"\
 }
 
 function main() {
@@ -88,8 +94,10 @@ function main() {
   do
       log_info "${func_name}" "Upload logs attempt ${i}/${count}"
       collect_and_upload_logs
-      log_info "${func_name}" "Sleeping for ${LOG_SEND_ITERATION_MINUTES} minutes until the next attempt."
-      sleep $((SERVICE_TIMEOUT_MINUTES*60))
+      if [ "$i" != "$count" ]; then # don't sleep at the last iteration.
+        log_info "${func_name}" "Sleeping for ${LOG_SEND_ITERATION_MINUTES} minutes until the next attempt."
+        sleep $((SERVICE_TIMEOUT_MINUTES*60))
+      fi
   done
 }
 
