@@ -74,16 +74,19 @@ function collect_and_upload_logs() {
 
   journalctl > $logs_path/journalctl.log
   ip a > $logs_path/ip_a.log
+  cp /etc/resolv.conf $logs_path
 
-  tar -czvf $logs_dir_name.tar.gz $logs_path
+  pushd /tmp
+  tar -czvf $logs_dir_name.tar.gz $logs_dir_name
+  popd
 
   log_info "${func_name}" "Uploading logs."
 
   curl -s \
     -H "X-Secret-Key: ${PULL_SECRET_TOKEN}" \
     -X POST \
-    -F upfile=@$logs_dir_name.tar.gz \
-     "$ASSISTED_SERVICE_URL/$ASSISTED_API_BASE_PATH/clusters/$CLUSTER_ID/logs?logs_type=host-boot&infra_env_id=$INFRA_ENV_ID&host_id=$HOST_ID"\
+    -F upfile=@$logs_path \
+     "$ASSISTED_SERVICE_URL/$ASSISTED_API_BASE_PATH/clusters/$CLUSTER_ID/logs?logs_type=host-boot&infra_env_id=$INFRA_ENV_ID&host_id=$HOST_ID"
 }
 
 function main() {
